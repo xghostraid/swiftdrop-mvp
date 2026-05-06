@@ -3,114 +3,150 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>SwiftDrop Ideal Flow Mockup</title>
-    <link rel="stylesheet" href="/mockup.css" />
+    <title>SwiftDrop Mockup V2</title>
+    <style>
+      :root {
+        --bg: #111520;
+        --card: #1a1f2e;
+        --muted: #8a94a8;
+        --text: #f7f9fc;
+        --orange: #f5a623;
+        --teal: #10b981;
+        --border: #2d3447;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: radial-gradient(circle at 20% 0%, #1f2a44 0%, var(--bg) 55%);
+        color: var(--text);
+      }
+      .wrap {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 24px 16px 40px;
+      }
+      .hero {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+      .title {
+        margin: 0;
+        font-size: 1.6rem;
+      }
+      .sub {
+        margin: 6px 0 0;
+        color: var(--muted);
+      }
+      .actions {
+        display: flex;
+        gap: 8px;
+      }
+      .btn {
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 10px 14px;
+        cursor: pointer;
+        text-decoration: none;
+        font-weight: 600;
+      }
+      .btn.primary {
+        background: linear-gradient(135deg, var(--orange), #ffbf5e);
+        color: #221a0b;
+        border-color: #f9be5f;
+      }
+      .btn.ghost {
+        color: var(--text);
+        background: rgba(255, 255, 255, 0.02);
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 10px;
+        margin-bottom: 14px;
+      }
+      .chip {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 10px;
+        font-size: 0.88rem;
+        color: var(--muted);
+      }
+      .chip b {
+        color: var(--teal);
+        display: block;
+        margin-bottom: 4px;
+      }
+      .preview {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        overflow: hidden;
+      }
+      .preview-head {
+        display: flex;
+        justify-content: space-between;
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--border);
+        color: var(--muted);
+        font-size: 0.86rem;
+      }
+      iframe {
+        width: 100%;
+        min-height: 78vh;
+        border: 0;
+        display: block;
+        background: #0e1320;
+      }
+      @media (max-width: 760px) {
+        .hero {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+        .actions {
+          width: 100%;
+        }
+        .actions .btn {
+          flex: 1;
+          text-align: center;
+        }
+      }
+    </style>
   </head>
   <body>
-    <main class="app-shell">
-      <section class="map-layer">
-        <div class="brand-badge">SwiftDrop</div>
-        <div class="top-actions">
-          <button class="ghost">Search</button>
-          <button class="ghost">History</button>
+    <main class="wrap">
+      <section class="hero">
+        <div>
+          <h1 class="title">SwiftDrop Mockup V2 (Current)</h1>
+          <p class="sub">This page now mirrors the latest implemented UI and feature direction.</p>
         </div>
-        <div class="eta-chip">Nearest rider: 2 min away</div>
+        <div class="actions">
+          <a class="btn ghost" href="/mockup.html">Refresh</a>
+          <a class="btn primary" href="/" target="_blank" rel="noopener noreferrer">Open Full App</a>
+        </div>
       </section>
 
-      <section class="bottom-sheet" id="sheet">
-        <div class="sheet-handle"></div>
-        <div class="sheet-head">
-          <h1 id="flow-title">Anything. Anyone. Instantly.</h1>
-          <p id="flow-sub">Fast local delivery with familiar map-first flow.</p>
-        </div>
+      <section class="grid" aria-label="new mockup highlights">
+        <div class="chip"><b>Map-first UX</b>Live route panel, milestones, and tracking focus.</div>
+        <div class="chip"><b>Driver Mode</b>Online toggle, offers, wallet, payout flow, bank details.</div>
+        <div class="chip"><b>Operations</b>Support, surge zones, analytics dashboard, admin reviews.</div>
+        <div class="chip"><b>Trust + Security</b>JWT auth, docs review, PIN verify, proof of delivery.</div>
+        <div class="chip"><b>Real-time</b>SSE updates, notifications, order chat, live status changes.</div>
+      </section>
 
-        <div id="step-home" class="step active">
-          <div class="quick-tags">
-            <span>Food</span>
-            <span>Documents</span>
-            <span>Parcels</span>
-            <span>Groceries</span>
-          </div>
-          <button class="primary huge" data-next="vehicle">Send Now</button>
-          <p class="hint">3 taps: Choose vehicle -> Confirm route -> Book</p>
+      <section class="preview">
+        <div class="preview-head">
+          <span>Embedded live app preview</span>
+          <span>Source: <code>/</code></span>
         </div>
-
-        <div id="step-vehicle" class="step">
-          <h2>Choose your delivery type</h2>
-          <div class="vehicle-grid" id="vehicle-grid">
-            <button class="vehicle selected" data-vehicle="Bike">
-              <strong>Bike</strong>
-              <small>Small urgent items</small>
-              <em>from $4.50</em>
-            </button>
-            <button class="vehicle" data-vehicle="Car">
-              <strong>Car</strong>
-              <small>Everyday parcels</small>
-              <em>from $6.20</em>
-            </button>
-            <button class="vehicle" data-vehicle="Van">
-              <strong>Van</strong>
-              <small>Bulky items</small>
-              <em>from $8.90</em>
-            </button>
-            <button class="vehicle" data-vehicle="Truck">
-              <strong>Truck</strong>
-              <small>Heavy deliveries</small>
-              <em>from $12.40</em>
-            </button>
-          </div>
-          <div class="row">
-            <button class="secondary" data-back="home">Back</button>
-            <button class="primary" data-next="route">Continue</button>
-          </div>
-        </div>
-
-        <div id="step-route" class="step">
-          <h2>Route and item</h2>
-          <label>
-            Pickup
-            <input value="Gedimino pr. 9, Vilnius" />
-          </label>
-          <label>
-            Drop-off
-            <input value="Ozo g. 18, Vilnius" />
-          </label>
-          <label>
-            Item type
-            <select>
-              <option>Documents</option>
-              <option>Food</option>
-              <option>Parcel</option>
-              <option>Electronics</option>
-            </select>
-          </label>
-          <div class="choice-row">
-            <button class="choice selected">ASAP</button>
-            <button class="choice">Scheduled</button>
-            <button class="choice">Cash</button>
-            <button class="choice selected">Card</button>
-          </div>
-          <div class="row">
-            <button class="secondary" data-back="vehicle">Back</button>
-            <button class="primary" data-next="confirm">Review</button>
-          </div>
-        </div>
-
-        <div id="step-confirm" class="step">
-          <h2>Confirm in one tap</h2>
-          <div class="summary-card">
-            <p><b>Vehicle:</b> <span id="chosen-vehicle">Bike</span></p>
-            <p><b>ETA pickup:</b> 2 min</p>
-            <p><b>Distance:</b> 4.8 km</p>
-            <p><b>Estimated fare:</b> $7.20</p>
-          </div>
-          <button class="primary huge">Book SwiftDrop</button>
-          <p class="hint">After booking: live map tracking, in-app chat, PIN handoff.</p>
-          <button class="link" data-back="route">Edit details</button>
-        </div>
+        <iframe src="/" title="SwiftDrop Live Mockup Preview"></iframe>
       </section>
     </main>
-
-    <script src="/mockup.js"></script>
   </body>
 </html>
