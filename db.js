@@ -169,6 +169,44 @@ function initSchema() {
     metadata_json TEXT NOT NULL,
     created_at TEXT NOT NULL
   )`);
+
+  run(`CREATE TABLE IF NOT EXISTS delivery_ratings (
+    id TEXT PRIMARY KEY,
+    delivery_id TEXT NOT NULL,
+    from_user_id TEXT NOT NULL,
+    from_role TEXT NOT NULL,
+    target TEXT NOT NULL,
+    score INTEGER NOT NULL,
+    comment TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    UNIQUE(delivery_id, from_role, target)
+  )`);
+
+  run(`CREATE TABLE IF NOT EXISTS push_tokens (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    token TEXT NOT NULL,
+    platform TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    UNIQUE(user_id, token)
+  )`);
+}
+
+function migrateSchema() {
+  const tryAlter = (sql) => {
+    try {
+      db.prepare(sql).run();
+    } catch (err) {
+      const msg = String(err.message || "");
+      if (!msg.includes("duplicate column") && !msg.includes("already exists")) {
+        console.warn("[migrate]", msg);
+      }
+    }
+  };
+  tryAlter("ALTER TABLE deliveries ADD COLUMN pickup_photo_path TEXT NOT NULL DEFAULT ''");
+  tryAlter("ALTER TABLE deliveries ADD COLUMN recipient_phone TEXT NOT NULL DEFAULT ''");
+  tryAlter("ALTER TABLE deliveries ADD COLUMN payment_status TEXT NOT NULL DEFAULT 'unpaid'");
+  tryAlter("ALTER TABLE deliveries ADD COLUMN stripe_payment_intent_id TEXT NOT NULL DEFAULT ''");
 }
 
 function seedDefaults() {
@@ -297,6 +335,10 @@ function mapDelivery(row, driversById = {}) {
     podPhotoPath: row.pod_photo_path || "",
     podSignature: row.pod_signature || "",
     podNote: row.pod_note || "",
+    pickupPhotoPath: row.pickup_photo_path || "",
+    recipientPhone: row.recipient_phone || "",
+    paymentStatus: row.payment_status || "unpaid",
+    stripePaymentIntentId: row.stripe_payment_intent_id || "",
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
@@ -318,6 +360,7 @@ function ensureUploadsDir() {
 }
 
 initSchema();
+migrateSchema();
 seedDefaults();
 ensureUploadsDir();
 

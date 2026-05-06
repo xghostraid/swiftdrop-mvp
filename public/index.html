@@ -231,6 +231,9 @@
 
         <div class="promo-row">
           <input id="input-recipient" class="addr-input promo-input" placeholder="Recipient name (optional)" autocomplete="off" />
+          <input id="input-recipient-phone" class="addr-input promo-input" placeholder="Recipient phone (+E.164 for SMS)" autocomplete="off" />
+        </div>
+        <div class="promo-row">
           <input id="input-promo" class="addr-input promo-input" placeholder="Promo code (e.g. WELCOME10)" autocomplete="off" />
         </div>
         <div class="pricing-meta">
@@ -349,6 +352,22 @@
             <div class="mile-time" id="mile-delivered-time">Pending</div>
           </div>
         </div>
+        <div class="handoff-card">
+          <div class="pod-title">QR + PIN handoff</div>
+          <p class="bank-save-meta">Recipient scans QR — payload includes delivery id and PIN. PIN field below for typed entry.</p>
+          <img id="handoff-qr" class="handoff-qr hidden" alt="Handoff QR code" />
+        </div>
+        <div class="payment-card">
+          <div class="pod-title">Stripe card hold</div>
+          <div id="payment-status-line" class="bank-save-meta">Payment: unpaid (demo)</div>
+          <div id="card-element" class="card-element-wrap hidden"></div>
+          <button id="payment-hold-btn" type="button" class="bank-save-btn">Authorize payment hold</button>
+        </div>
+        <div class="pickup-pod-card">
+          <div class="pod-title">Pickup photo proof</div>
+          <input id="pickup-photo" type="file" accept="image/*" />
+          <button id="pickup-save-btn" type="button" class="bank-save-btn">Upload pickup proof</button>
+        </div>
         <div class="pin-verify-card">
           <input id="track-pin-input" placeholder="Enter recipient PIN to complete" />
           <button id="track-pin-btn">Verify PIN</button>
@@ -367,6 +386,10 @@
             <input id="chat-input" placeholder="Type a message..." />
             <button id="chat-send-btn">Send</button>
           </div>
+        </div>
+        <div class="ratings-card hidden" id="ratings-card">
+          <div class="pod-title">Two-way ratings</div>
+          <div id="ratings-body" class="ratings-body"></div>
         </div>
         <button class="new-delivery-link" id="new-delivery-btn">+ New delivery</button>
 
@@ -423,6 +446,18 @@
         <div class="heatmap-wrap">
           <h3>Zone Heatmap</h3>
           <div id="heatmap-list" class="heatmap-list"></div>
+        </div>
+        <div class="live-map-wrap hidden" id="admin-live-wrap">
+          <h3>Live map (Socket.IO GPS)</h3>
+          <div id="admin-live-map" class="admin-live-map"></div>
+          <p id="admin-live-meta" class="bank-save-meta">Waiting for driver location broadcasts…</p>
+        </div>
+        <div class="integrations-meta" id="integrations-meta"></div>
+        <div class="fcm-admin-test hidden" id="fcm-admin-test">
+          <h3>FCM test</h3>
+          <p class="bank-save-meta">Send via Firebase Admin to every token stored for this user.</p>
+          <input id="fcm-target-user" class="bank-input" placeholder="User id (JWT sub, e.g. u_sender)" />
+          <button type="button" class="bank-save-btn" id="fcm-send-test">Send test push</button>
         </div>
         <div class="surge-editor" id="surge-editor">
           <h3>Surge Zone Editor (Admin)</h3>
@@ -491,7 +526,15 @@
           </div>
           <button class="online-pill" id="online-pill">Online</button>
         </div>
+        <label class="gps-toggle" for="driver-use-real-gps">
+          <input type="checkbox" id="driver-use-real-gps" checked />
+          Use real device GPS (browser). Uncheck to simulate route.
+        </label>
 
+        <div class="onboard-card" id="onboard-card">
+          <div class="bank-title">Driver onboarding</div>
+          <ol id="onboard-steps" class="onboard-steps"></ol>
+        </div>
         <div class="driver-stats-cards">
           <div class="dstat-card">
             <div class="dstat-label">Today</div>
@@ -563,6 +606,8 @@
     <!-- TOAST -->
     <div id="toast" class="toast hidden"></div>
 
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://js.stripe.com/v3/"></script>
     <script src="/app.js"></script>
   </body>
 </html>

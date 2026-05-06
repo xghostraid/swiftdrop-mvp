@@ -15,6 +15,7 @@ const rawFetch = window.fetch.bind(window);
 async function apiFetch(url, options = {}) {
   const headers = new Headers(options.headers || {});
   if (state.token) headers.set("Authorization", `Bearer ${state.token}`);
+  if (state.role === "driver" && state.driverId) headers.set("x-driver-id", state.driverId);
   return rawFetch(url, { ...options, headers });
 }
 window.fetch = apiFetch;
@@ -419,6 +420,12 @@ function completeAuth(user) {
   renderNotifications();
   applyRoleUI();
   addNotification(`Signed in as ${String(user.role || "sender").toUpperCase()}.`);
+  connectSocket();
+  registerPushDemoToken();
+  if (state.socket?.connected) {
+    if (state.activeId) state.socket.emit("join:delivery", state.activeId);
+    if (state.role === "admin") state.socket.emit("join:admin");
+  }
 
   if (state.role === "driver") showScreen("profile");
   else if (state.role === "admin") showScreen("history");
@@ -433,6 +440,15 @@ function logout() {
   state.token = "";
   state.activeId = null;
   clearInterval(state.pollTimer);
+  stopDriverGpsTracking();
+  if (state.socket) {
+    try {
+      state.socket.disconnect();
+    } catch {
+      /* ignore */
+    }
+    state.socket = null;
+  }
   $("profile-menu-wrap").classList.add("hidden");
   $("profile-dropdown").classList.add("hidden");
   $("notif-panel").classList.add("hidden");
@@ -592,6 +608,12 @@ const state = {
   token: "",
   notifications: [],
   unread: 0,
+  socket: null,
+  stripeCard: null,
+  _driverLocTimer: null,
+  _gpsWatchId: null,
+  _gpsToggleWired: false,
+  lastLiveGpsAt: 0
 };
 
 function applyRoleUI() {
@@ -599,10 +621,274 @@ function applyRoleUI() {
   $("role-chip").textContent = role;
   const surgeEditor = $("surge-editor");
   if (surgeEditor) surgeEditor.classList.toggle("hidden", (state.role || "sender") !== "admin");
+  const adminLive = $("admin-live-wrap");
+  if (adminLive) adminLive.classList.toggle("hidden", (state.role || "sender") !== "admin");
+  const fcmTest = $("fcm-admin-test");
+  if (fcmTest) fcmTest.classList.toggle("hidden", (state.role || "sender") !== "admin");
+}
+
+function projectLatLng(lat, lng) {
+  const minLat = 54.64;
+  const maxLat = 54.72;
+  const minLng = 25.18;
+  const maxLng = 25.32;
+  const x = 44 + ((lng - minLng) / (maxLng - minLng)) * 252;
+  const y = 148 - ((lat - minLat) / (maxLat - minLat)) * 118;
+  return { x, y };
+}
+
+function connectSocket() {
+  if (typeof io === "undefined") return;
+  if (state.socket && state.socket.connected) return;
+  if (state.socket) {
+    try {
+      state.socket.disconnect();
+    } catch {
+      /* ignore */
+    }
+  }
+  state.socket = io({ transports: ["websocket", "polling"] });
+  state.socket.on("connect", () => {
+    if (state.activeId) state.socket.emit("join:delivery", state.activeId);
+    if (state.role === "admin") state.socket.emit("join:admin");
+  });
+  state.socket.on("driver:location", (payload) => {
+    if (!payload || !Number.isFinite(payload.lat)) return;
+    if (payload.deliveryId && state.activeId && payload.deliveryId !== state.activeId) return;
+    const marker = $("courier-marker");
+    if (marker) {
+      const { x, y } = projectLatLng(payload.lat, payload.lng);
+      marker.setAttribute("transform", `translate(${x},${y})`);
+    }
+    const live = $("driver-live-pos");
+    if (live) {
+      const acc = payload.accuracy != null ? ` ±${Math.round(payload.accuracy)}m` : "";
+      live.textContent = `Live GPS · ${payload.lat.toFixed(5)}, ${payload.lng.toFixed(5)}${acc}`;
+    }
+    const updated = $("map-updated-at");
+    if (updated) updated.textContent = `Updated ${new Date().toLocaleTimeString()}`;
+    state.lastLiveGpsAt = Date.now();
+  });
+}
+
+function stopDriverGpsTracking() {
+  clearInterval(state._driverLocTimer);
+  state._driverLocTimer = null;
+  if (state._gpsWatchId != null && typeof navigator !== "undefined" && navigator.geolocation?.clearWatch) {
+    try {
+      navigator.geolocation.clearWatch(state._gpsWatchId);
+    } catch {
+      /* ignore */
+    }
+  }
+  state._gpsWatchId = null;
+}
+
+function startDriverLocationTracking(job, forceSim = false) {
+  stopDriverGpsTracking();
+  if (!job || state.role !== "driver" || !state.driverOnline) return;
+
+  const storedPref = localStorage.getItem("swiftdrop_use_real_gps");
+  const checkboxPref = $("driver-use-real-gps")?.checked !== false;
+  const useReal = !forceSim && checkboxPref && storedPref !== "0";
+
+  const emit = (lat, lng, extra = {}) => {
+    if (typeof io === "undefined") return;
+    if (!state.socket?.connected) connectSocket();
+    state.socket.emit("driver:location", {
+      driverId: state.driverId,
+      deliveryId: job.id,
+      lat,
+      lng,
+      ...extra
+    });
+  };
+
+  const runSimulation = () => {
+    state._driverLocTimer = setInterval(() => {
+      const t = (Date.now() % 80000) / 80000;
+      const lat = 54.67 + t * 0.04;
+      const lng = 25.22 + Math.sin(t * Math.PI * 2) * 0.03;
+      emit(lat, lng, { source: "sim" });
+    }, 2500);
+  };
+
+  if (!useReal) {
+    runSimulation();
+    return;
+  }
+
+  if (typeof navigator === "undefined" || !navigator.geolocation) {
+    toast("This browser has no geolocation API — using simulated movement.");
+    runSimulation();
+    return;
+  }
+
+  state._gpsWatchId = navigator.geolocation.watchPosition(
+    (pos) => {
+      emit(pos.coords.latitude, pos.coords.longitude, {
+        accuracy: pos.coords.accuracy,
+        source: "gps"
+      });
+    },
+    (err) => {
+      toast(`GPS unavailable (${err.code === 1 ? "permission denied" : err.message}) — using simulation.`);
+      startDriverLocationTracking(job, true);
+    },
+    { enableHighAccuracy: true, maximumAge: 3000, timeout: 20000 }
+  );
+}
+
+async function registerPushDemoToken() {
+  if (!state.token) return;
+  const k = "swiftdrop_push_demo";
+  let t = localStorage.getItem(k);
+  if (!t) {
+    t = `demo-fcm-${typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Date.now()}`;
+    localStorage.setItem(k, t);
+  }
+  try {
+    await fetch("/api/push/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: t, platform: "web-demo" })
+    });
+  } catch {
+    /* optional */
+  }
+}
+
+async function loadHandoffQr(deliveryId) {
+  const img = $("handoff-qr");
+  if (!img || !deliveryId) return;
+  try {
+    const res = await fetch(`/api/deliveries/${deliveryId}/handoff-qr`);
+    const data = await res.json();
+    if (res.ok && data.qrDataUrl) {
+      img.src = data.qrDataUrl;
+      img.classList.remove("hidden");
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+async function loadIntegrationsMeta() {
+  const el = $("integrations-meta");
+  if (!el) return;
+  try {
+    const res = await fetch("/api/integrations/status");
+    const s = await res.json();
+    el.innerHTML = `<span class="meta-chip">Stripe: ${s.stripe ? "configured" : "off"}</span> <span class="meta-chip">Twilio SMS: ${s.twilio ? "on" : "off"}</span> <span class="meta-chip">Socket.IO: live</span> <span class="meta-chip">FCM (Admin SDK): ${s.fcm ? "ready" : "off"}</span>${s.firebaseLegacyKey ? ` <span class="meta-chip">Legacy FCM key env: set</span>` : ""}`;
+  } catch {
+    el.textContent = "";
+  }
+}
+
+async function loadLiveMap() {
+  if (state.role !== "admin") return;
+  const map = $("admin-live-map");
+  const meta = $("admin-live-meta");
+  if (!map || !meta) return;
+  try {
+    const res = await fetch("/api/admin/live-positions");
+    const data = await res.json();
+    if (!res.ok) return;
+    map.innerHTML = "";
+    const pos = data.positions || {};
+    Object.entries(pos).forEach(([id, p]) => {
+      const dot = document.createElement("div");
+      dot.className = "live-dot";
+      const lng = Number(p.lng);
+      const lat = Number(p.lat);
+      dot.style.left = `${12 + ((lng - 25.18) / 0.14) * 76}%`;
+      dot.style.top = `${8 + (1 - (lat - 54.64) / 0.08) * 84}%`;
+      dot.title = `${id} · ${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+      map.appendChild(dot);
+    });
+    meta.textContent = `${Object.keys(pos).length} driver(s) reporting live GPS (simulated or real).`;
+  } catch {
+    meta.textContent = "Could not load live positions.";
+  }
+}
+
+async function renderRatingsPanel(d) {
+  const card = $("ratings-card");
+  const body = $("ratings-body");
+  if (!card || !body) return;
+  if (d.status !== "Delivered") {
+    card.classList.add("hidden");
+    return;
+  }
+  card.classList.remove("hidden");
+  let rows = [];
+  try {
+    const res = await fetch(`/api/deliveries/${d.id}/ratings`);
+    rows = await res.json();
+  } catch {
+    rows = [];
+  }
+  const hasDriverRating = rows.some((r) => r.target === "driver");
+  const hasSenderRating = rows.some((r) => r.target === "sender");
+  const role = state.role || "sender";
+  let controls = "";
+  if (role === "sender" && !hasDriverRating && state.token) {
+    controls += `<div class="rating-row"><span>Rate driver</span>
+      <select id="rate-driver-score"><option value="5">5</option><option value="4">4</option><option value="3">3</option><option value="2">2</option><option value="1">1</option></select>
+      <button type="button" id="rate-driver-btn" class="bank-save-btn">Submit</button></div>`;
+  }
+  if (role === "driver" && !hasSenderRating && state.token) {
+    controls += `<div class="rating-row"><span>Rate sender</span>
+      <select id="rate-sender-score"><option value="5">5</option><option value="4">4</option><option value="3">3</option><option value="2">2</option><option value="1">1</option></select>
+      <button type="button" id="rate-sender-btn" class="bank-save-btn">Submit</button></div>`;
+  }
+  body.innerHTML = `
+    <div class="bank-save-meta">${rows.length ? rows.map((r) => `<div>${r.from_role} → ${r.target}: ${r.score}★</div>`).join("") : "No ratings yet."}</div>
+    ${controls}
+  `;
+  $("rate-driver-btn")?.addEventListener("click", async () => {
+    const score = Number($("rate-driver-score")?.value || 5);
+    const res = await fetch(`/api/deliveries/${d.id}/ratings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ target: "driver", score })
+    });
+    const err = await res.json().catch(() => ({}));
+    if (!res.ok) return toast(err.error || "Could not save rating.");
+    toast("Thanks — driver rated.");
+    const list = await fetch("/api/deliveries").then((r) => r.json());
+    const nd = list.find((x) => x.id === d.id);
+    if (nd) await renderRatingsPanel(nd);
+  });
+  $("rate-sender-btn")?.addEventListener("click", async () => {
+    const score = Number($("rate-sender-score")?.value || 5);
+    const res = await fetch(`/api/deliveries/${d.id}/ratings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ target: "sender", score, driverId: state.driverId })
+    });
+    const err = await res.json().catch(() => ({}));
+    if (!res.ok) return toast(err.error || "Could not save rating.");
+    toast("Thanks — sender rated.");
+    const all = await fetch("/api/deliveries").then((r) => r.json());
+    renderRatingsPanel(all.find((x) => x.id === d.id) || d);
+  });
+}
+
+function renderOnboarding(driver, docs = []) {
+  const ol = $("onboard-steps");
+  if (!ol) return;
+  const ibanOk = Boolean(driver.bankDetails?.iban);
+  const docOk = (docs || []).some((x) => x.status === "approved");
+  const steps = [
+    { ok: ibanOk, label: "Add bank details for payouts" },
+    { ok: docOk, label: "Documents approved by admin" },
+    { ok: driver.online, label: "Stay online to receive jobs" }
+  ];
+  ol.innerHTML = steps.map((s) => `<li style="color:${s.ok ? "var(--teal)" : "var(--text2)"}">${s.ok ? "✓" : "○"} ${s.label}</li>`).join("");
 }
 
 // ─── HOME ─────────────────────────────────────────────────
-$("home-send-btn").addEventListener("click", () => showScreen("booking"));
 
 // category tiles → pre-select item type
 document.querySelectorAll(".cat-tile[data-cat]").forEach((tile) => {
@@ -756,27 +1042,29 @@ $("confirm-btn").addEventListener("click", async () => {
   const stopAddresses = parseStopAddresses();
   const promoCode = $("input-promo").value.trim();
   const recipientName = $("input-recipient").value.trim();
+  const recipientPhone = ($("input-recipient-phone") && $("input-recipient-phone").value.trim()) || "";
 
   try {
     const res = await fetch("/api/deliveries", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        senderName:    "Precious",
+        senderName: state.user?.name || "Precious",
         pickupAddress: pickup,
         dropoffAddress: dropoff,
-        itemCategory:  state.itemCategory,
-        size:          "small",
-        courierType:   state.courierType,
-        deliveryMode:  state.deliveryMode,
-        scheduledAt:   $("input-scheduled").value || "",
+        itemCategory: state.itemCategory,
+        size: "small",
+        courierType: state.courierType,
+        deliveryMode: state.deliveryMode,
+        scheduledAt: $("input-scheduled").value || "",
         stopCount,
         stopAddresses,
-        urgent:        state.urgent,
-        paymentType:   state.paymentType,
-        distanceKm:    distKm,
+        urgent: state.urgent,
+        paymentType: state.paymentType,
+        distanceKm: distKm,
         promoCode,
-        recipientName
+        recipientName,
+        recipientPhone
       })
     });
     const data = await res.json();
@@ -846,8 +1134,11 @@ const STATUS_TEXT = {
 const ETAS = { Matched:"~4 min", "Picked Up":"~7 min", "In Transit":"Tracking…" };
 
 function initTracking(delivery) {
+  connectSocket();
   renderTracking(delivery);
   loadChat();
+  loadHandoffQr(delivery.id);
+  if (state.socket?.connected && delivery.id) state.socket.emit("join:delivery", delivery.id);
   clearInterval(state.pollTimer);
   state.pollTimer = setInterval(() => pollOnce(state.activeId), 2500);
 }
@@ -886,7 +1177,8 @@ function renderTracking(d) {
 
   const routePath = $("route-path");
   const courierMarker = $("courier-marker");
-  if (routePath && courierMarker && typeof routePath.getTotalLength === "function") {
+  const usePathFallback = !state.lastLiveGpsAt || Date.now() - state.lastLiveGpsAt > 12000;
+  if (usePathFallback && routePath && courierMarker && typeof routePath.getTotalLength === "function") {
     const pathLen = routePath.getTotalLength();
     const clamped = Math.max(0.05, Math.min(1, progressPct / 100));
     const point = routePath.getPointAtLength(pathLen * clamped);
@@ -926,6 +1218,10 @@ function renderTracking(d) {
   $("mile-delivered-time").textContent = deliveredEntry ? new Date(deliveredEntry.at).toLocaleTimeString() : "Pending";
   $("mile-pickedup-card").classList.toggle("complete", Boolean(pickedUpEntry));
   $("mile-delivered-card").classList.toggle("complete", Boolean(deliveredEntry));
+
+  const pay = $("payment-status-line");
+  if (pay) pay.textContent = `Payment: ${d.paymentStatus || "unpaid"}`;
+  void renderRatingsPanel(d);
 }
 
 $("new-delivery-btn").addEventListener("click", () => {
@@ -951,6 +1247,67 @@ $("track-pin-btn").addEventListener("click", async () => {
   pollOnce(state.activeId);
 });
 
+$("payment-hold-btn")?.addEventListener("click", async () => {
+  if (!state.activeId) return toast("Open a delivery first.");
+  if (!state.token) return toast("Log in to authorize payment.");
+  const res = await fetch("/api/payments/create-intent", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ deliveryId: state.activeId })
+  });
+  const data = await res.json();
+  if (!res.ok) return toast(data.error || "Payment intent failed.");
+  if (data.mock) {
+    toast(data.message || "Demo payment authorized.");
+    pollOnce(state.activeId);
+    return;
+  }
+  if (!data.clientSecret || !data.publishableKey) return toast("Add STRIPE_PUBLISHABLE_KEY for the card form.");
+  if (typeof Stripe === "undefined") return toast("Stripe.js not loaded.");
+  const stripe = Stripe(data.publishableKey);
+  const cardWrap = $("card-element");
+  if (cardWrap) cardWrap.classList.remove("hidden");
+  if (!state.stripeCard) {
+    const elements = stripe.elements();
+    state.stripeCard = elements.create("card");
+    state.stripeCard.mount("#card-element");
+  }
+  const { error } = await stripe.confirmCardPayment(data.clientSecret, { payment_method: { card: state.stripeCard } });
+  if (error) return toast(error.message);
+  toast("Payment authorized.");
+  pollOnce(state.activeId);
+});
+
+$("pickup-save-btn")?.addEventListener("click", async () => {
+  if (!state.activeId) return;
+  const input = $("pickup-photo");
+  if (!input || !input.files || !input.files.length) return toast("Choose a pickup photo first.");
+  const fd = new FormData();
+  fd.append("photo", input.files[0]);
+  const res = await fetch(`/api/deliveries/${state.activeId}/pickup-proof`, { method: "POST", body: fd });
+  const err = await res.json().catch(() => ({}));
+  if (!res.ok) return toast(err.error || "Upload failed.");
+  toast("Pickup proof saved.");
+  pollOnce(state.activeId);
+});
+
+$("fcm-send-test")?.addEventListener("click", async () => {
+  const userId = $("fcm-target-user")?.value?.trim();
+  if (!userId) return toast("Enter target user id (e.g. u_sender).");
+  const res = await fetch("/api/admin/push-test", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      userId,
+      title: "SwiftDrop",
+      body: "Test push from admin console."
+    })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) return toast(data.error || "FCM test failed.");
+  toast(`FCM: ${data.successCount ?? 0} ok · ${data.failureCount ?? 0} failed`);
+});
+
 // ─── HISTORY SCREEN ───────────────────────────────────────
 const pillColour = (s) => ({
   Matching:    "badge-matching",
@@ -968,6 +1325,8 @@ async function loadHistory() {
   loadSupportTickets();
   loadSurgeZones();
   loadAdminReviewQueues();
+  loadIntegrationsMeta();
+  loadLiveMap();
   $("surge-editor").classList.toggle("hidden", state.role !== "admin");
 
   $("ops-stats").innerHTML = `
@@ -1069,6 +1428,19 @@ async function loadDriverDashboard() {
   pill.textContent = driver.online ? "Online" : "Offline";
   pill.classList.toggle("offline", !driver.online);
   state.driverOnline = driver.online;
+
+  const gpsCb = $("driver-use-real-gps");
+  if (gpsCb) {
+    gpsCb.checked = localStorage.getItem("swiftdrop_use_real_gps") !== "0";
+    if (!state._gpsToggleWired) {
+      state._gpsToggleWired = true;
+      gpsCb.addEventListener("change", (e) => {
+        localStorage.setItem("swiftdrop_use_real_gps", e.target.checked ? "1" : "0");
+        loadDriverDashboard();
+      });
+    }
+  }
+
   renderBankDetails(driver.bankDetails || {});
   $("bank-save-meta").textContent = driver.bankDetails?.iban
     ? "Bank details on file for payout."
@@ -1079,6 +1451,7 @@ async function loadDriverDashboard() {
   const docsRes = await fetch(`/api/drivers/${state.driverId}/documents`);
   const docs = await docsRes.json();
   renderDocuments(docs || []);
+  renderOnboarding(driver, docs || []);
 
   // offer section
   const offerSec = $("offer-section");
@@ -1149,7 +1522,8 @@ function renderActiveJob(job) {
 
   if (!job) {
     lastLabel.style.display = "none";
-    lastJobs.innerHTML      = "";
+    lastJobs.innerHTML = "";
+    stopDriverGpsTracking();
     return;
   }
 
@@ -1170,6 +1544,12 @@ function renderActiveJob(job) {
     </div>
     ${next ? `<button class="hcard-advance" id="job-advance" style="margin-top:6px">→ Mark as ${next}</button>` : ""}
   `;
+
+  if (job && state.role === "driver" && state.driverOnline) {
+    startDriverLocationTracking(job);
+  } else {
+    stopDriverGpsTracking();
+  }
 
   const adv = $("job-advance");
   if (adv) {
@@ -1277,6 +1657,7 @@ function connectLiveEvents() {
 // ─── Boot ─────────────────────────────────────────────────
 updateFarePreview();
 initTheme();
+connectSocket();
 connectLiveEvents();
 showScreen("home");
 loadDemoUsers();

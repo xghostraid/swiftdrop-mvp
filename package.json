@@ -19,7 +19,12 @@
     "bcryptjs": "^3.0.3",
     "express": "^4.19.2",
     "express-rate-limit": "^8.5.0",
+    "firebase-admin": "^13.8.0",
     "jsonwebtoken": "^9.0.3",
-    "multer": "^2.1.1"
+    "multer": "^2.1.1",
+    "qrcode": "^1.5.4",
+    "socket.io": "^4.8.3",
+    "stripe": "^22.1.0",
+    "twilio": "^6.0.1"
   }
 }

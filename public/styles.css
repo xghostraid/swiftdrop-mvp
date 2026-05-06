@@ -1529,3 +1529,114 @@ html[data-theme="light"] .auth-screen {
   border-color: var(--orange);
   color: var(--orange);
 }
+
+/* Integrations: Socket.IO map, Stripe, QR, onboarding */
+.handoff-card,
+.payment-card,
+.pickup-pod-card,
+.ratings-card,
+.onboard-card,
+.live-map-wrap {
+  margin: 0 20px 12px;
+}
+.handoff-card,
+.payment-card,
+.pickup-pod-card,
+.ratings-card,
+.onboard-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+.handoff-qr {
+  max-width: 180px;
+  width: 100%;
+  margin: 0 auto;
+  display: block;
+  border-radius: 8px;
+}
+.card-element-wrap {
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card2);
+}
+.admin-live-map {
+  position: relative;
+  min-height: 140px;
+  background: var(--card2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.live-dot {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background: var(--orange);
+  border: 2px solid var(--card);
+  border-radius: 50%;
+  box-shadow: 0 0 8px rgba(245, 166, 35, 0.55);
+  transform: translate(-50%, -50%);
+}
+.integrations-meta {
+  margin: 0 20px 12px;
+  font-size: 0.72rem;
+  color: var(--text2);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.onboard-steps {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 0.8rem;
+  color: var(--text2);
+}
+.ratings-body {
+  display: grid;
+  gap: 8px;
+}
+.rating-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.rating-row select {
+  background: var(--card2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 4px 6px;
+}
+
+.gps-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 20px 12px;
+  font-size: 0.78rem;
+  color: var(--text2);
+  cursor: pointer;
+}
+.gps-toggle input {
+  margin-top: 2px;
+}
+
+.fcm-admin-test {
+  margin: 0 20px 14px;
+  padding: 10px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  display: grid;
+  gap: 8px;
+}
+.fcm-admin-test h3 {
+  margin: 0;
+  font-size: 0.9rem;
+}

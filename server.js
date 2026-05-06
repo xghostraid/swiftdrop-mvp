@@ -1,17 +1,43 @@
 const express = require("express");
+const http = require("http");
 const path = require("path");
 const fs = require("fs");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const rateLimit = require("express-rate-limit");
 const multer = require("multer");
+const { Server } = require("socket.io");
+const QRCode = require("qrcode");
 const { run, get, all, nowIso, parseJson, mapDriver, mapDelivery, getDriversById } = require("./db");
 const { JWT_SECRET, optionalAuth, requireAuth } = require("./middleware/auth");
 const { requireRole } = require("./middleware/roles");
+const fcm = require("./lib/fcm");
+
+let stripe = null;
+try {
+  if (process.env.STRIPE_SECRET_KEY) {
+    stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+  }
+} catch (e) {
+  console.warn("Stripe not available:", e.message);
+}
+
+let twilioClient = null;
+try {
+  if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
+    twilioClient = require("twilio")(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+  }
+} catch (e) {
+  console.warn("Twilio not available:", e.message);
+}
 
 const app = express();
 const port = process.env.PORT || 3000;
 const sseClients = new Set();
+let io;
+
+/** Last reported GPS per driver (demo / mobile simulator). */
+const livePositions = new Map();
 const matchRadii = [2, 5, 10];
 const offerTtlSeconds = 15;
 const platformFeePct = 0.2;
@@ -20,11 +46,40 @@ const payoutMinAmount = 20;
 const uploadsDir = path.join(__dirname, "uploads");
 const docsDir = path.join(uploadsDir, "driver-docs");
 const podDir = path.join(uploadsDir, "pod");
+const pickupDir = path.join(uploadsDir, "pickup");
 fs.mkdirSync(docsDir, { recursive: true });
 fs.mkdirSync(podDir, { recursive: true });
+fs.mkdirSync(pickupDir, { recursive: true });
 
 const uploadDocs = multer({ dest: docsDir });
 const uploadPod = multer({ dest: podDir });
+const uploadPickup = multer({ dest: pickupDir });
+
+if (stripe && process.env.STRIPE_WEBHOOK_SECRET) {
+  app.post("/api/webhooks/stripe", express.raw({ type: "application/json" }), async (req, res) => {
+    const sig = req.headers["stripe-signature"];
+    let event;
+    try {
+      event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
+    } catch (err) {
+      return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
+    if (event.type === "payment_intent.succeeded") {
+      const pi = event.data.object;
+      const deliveryId = pi.metadata?.deliveryId;
+      if (deliveryId) {
+        const d = fetchDelivery(deliveryId);
+        if (d) {
+          d.paymentStatus = "captured";
+          d.stripePaymentIntentId = pi.id;
+          saveDelivery(d);
+          broadcastEvent("delivery.updated", { delivery: { id: d.id, paymentStatus: "captured" } });
+        }
+      }
+    }
+    return res.json({ received: true });
+  });
+}
 
 app.use(express.json({ limit: "2mb" }));
 app.use("/uploads", express.static(uploadsDir));
@@ -56,6 +111,7 @@ function auditLog(req, action, targetType, targetId, metadata = {}) {
 function broadcastEvent(type, payload) {
   const data = `event: ${type}\ndata: ${JSON.stringify(payload)}\n\n`;
   sseClients.forEach((res) => res.write(data));
+  if (io) io.emit(type, payload);
 }
 
 function fetchDrivers() {
@@ -77,7 +133,7 @@ function saveDelivery(delivery) {
   run(
     `UPDATE deliveries SET
       driver_id=?, matching_radius_km=?, status=?, pin_verified=?, pin_attempts=?, payout_credited=?, history_json=?,
-      pod_photo_path=?, pod_signature=?, pod_note=?, updated_at=?
+      pod_photo_path=?, pod_signature=?, pod_note=?, pickup_photo_path=?, recipient_phone=?, payment_status=?, stripe_payment_intent_id=?, updated_at=?
     WHERE id=?`,
     delivery.driver?.id || null,
     delivery.matchingRadiusKm ?? null,
@@ -89,9 +145,43 @@ function saveDelivery(delivery) {
     delivery.podPhotoPath || "",
     delivery.podSignature || "",
     delivery.podNote || "",
+    delivery.pickupPhotoPath || "",
+    delivery.recipientPhone || "",
+    delivery.paymentStatus || "unpaid",
+    delivery.stripePaymentIntentId || "",
     nowIso(),
     delivery.id
   );
+}
+
+function sendRecipientSms(delivery, template) {
+  const to = String(delivery.recipientPhone || "").replace(/\s+/g, "");
+  if (!to || !twilioClient || !process.env.TWILIO_FROM_NUMBER) return Promise.resolve({ skipped: true });
+  const body =
+    template === "matched"
+      ? `SwiftDrop: courier assigned for order ${delivery.id}. PIN for handoff: ${delivery.securityPin}. Track in the app.`
+      : template === "delivered"
+        ? `SwiftDrop: order ${delivery.id} was delivered. Thanks for using SwiftDrop.`
+        : `SwiftDrop update for order ${delivery.id}: ${String(delivery.status)}.`;
+  return twilioClient.messages.create({
+    from: process.env.TWILIO_FROM_NUMBER,
+    to,
+    body
+  });
+}
+
+function recomputeDriverRating(driverId) {
+  if (!driverId) return;
+  const row = get(
+    `SELECT AVG(r.score) AS avgScore, COUNT(*) AS c FROM delivery_ratings r
+     JOIN deliveries d ON d.id = r.delivery_id
+     WHERE r.target = 'driver' AND d.driver_id = ?`,
+    driverId
+  );
+  if (!row || !row.c) return;
+  const r = Number(Number(row.avgScore).toFixed(2));
+  run("UPDATE drivers SET rating=? WHERE id=?", r, driverId);
+  broadcastEvent("driver.updated", { id: driverId, rating: r });
 }
 
 function getOffer(deliveryId) {
@@ -452,7 +542,24 @@ app.post("/api/pricing/preview", (req, res) => {
 });
 
 app.post("/api/deliveries", (req, res) => {
-  const { senderName, pickupAddress, dropoffAddress, itemCategory, recipientName = "", size = "small", courierType = "bike", deliveryMode = "asap", scheduledAt = "", stopCount = 1, stopAddresses = [], urgent = false, paymentType = "card", distanceKm = 3, promoCode = "" } = req.body || {};
+  const {
+    senderName,
+    pickupAddress,
+    dropoffAddress,
+    itemCategory,
+    recipientName = "",
+    recipientPhone = "",
+    size = "small",
+    courierType = "bike",
+    deliveryMode = "asap",
+    scheduledAt = "",
+    stopCount = 1,
+    stopAddresses = [],
+    urgent = false,
+    paymentType = "card",
+    distanceKm = 3,
+    promoCode = ""
+  } = req.body || {};
   if (!senderName || !pickupAddress || !dropoffAddress || !itemCategory) return res.status(400).json({ error: "Missing required fields." });
   const fareBreakdown = estimateFare({
     distanceKm,
@@ -468,12 +575,13 @@ app.post("/api/deliveries", (req, res) => {
   const createdAt = nowIso();
   const securityPin = String(Math.floor(1000 + Math.random() * 9000));
   const history = [{ status: "Requested", at: createdAt }];
+  const cleanPhone = String(recipientPhone).trim();
   run(
     `INSERT INTO deliveries (
       id,sender_name,pickup_address,dropoff_address,item_category,recipient_name,size,courier_type,delivery_mode,scheduled_at,
       stop_count,stop_addresses_json,urgent,payment_type,promo_code,distance_km,fare_breakdown_json,fare,driver_id,matching_radius_km,status,
-      security_pin,pin_verified,pin_attempts,payout_credited,history_json,created_at,updated_at
-    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      security_pin,pin_verified,pin_attempts,payout_credited,history_json,created_at,updated_at,recipient_phone
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     id,
     senderName,
     pickupAddress,
@@ -501,7 +609,8 @@ app.post("/api/deliveries", (req, res) => {
     0,
     JSON.stringify(history),
     createdAt,
-    createdAt
+    createdAt,
+    cleanPhone
   );
   const delivery = fetchDelivery(id);
   createOffer(delivery, 0, []);
@@ -726,6 +835,8 @@ app.post("/api/drivers/:driverId/offers/:deliveryId/accept", (req, res) => {
     currentWorkload: driver.currentWorkload + 1
   });
   broadcastEvent("delivery.updated", { delivery: { id: delivery.id, status: delivery.status } });
+  const fresh = fetchDelivery(delivery.id);
+  sendRecipientSms(fresh, "matched").catch(() => {});
   return res.json(fetchDelivery(delivery.id));
 });
 
@@ -777,6 +888,9 @@ app.patch("/api/deliveries/:id/status", (req, res) => {
   }
   saveDelivery(delivery);
   broadcastEvent("delivery.updated", { delivery: { id: delivery.id, status: delivery.status } });
+  if (status === "Delivered") {
+    sendRecipientSms(fetchDelivery(delivery.id), "delivered").catch(() => {});
+  }
   return res.json(fetchDelivery(delivery.id));
 });
 
@@ -933,10 +1047,217 @@ app.get("/api/admin/audit-logs", requireAuth, requireRole("admin"), (_req, res) 
   res.json(all("SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT 500"));
 });
 
+app.get("/api/integrations/status", (_req, res) => {
+  res.json({
+    stripe: Boolean(stripe && process.env.STRIPE_SECRET_KEY),
+    stripeWebhook: Boolean(stripe && process.env.STRIPE_WEBHOOK_SECRET),
+    twilio: Boolean(twilioClient && process.env.TWILIO_FROM_NUMBER),
+    socketIo: true,
+    fcm: fcm.isReady(),
+    firebaseLegacyKey: Boolean(process.env.FIREBASE_SERVER_KEY)
+  });
+});
+
+app.get("/api/deliveries/:id/handoff-qr", async (req, res) => {
+  const delivery = fetchDelivery(req.params.id);
+  if (!delivery) return res.status(404).json({ error: "Delivery not found." });
+  const payload = JSON.stringify({ v: 1, id: delivery.id, pin: delivery.securityPin });
+  try {
+    const qrDataUrl = await QRCode.toDataURL(payload, { margin: 1, width: 240, errorCorrectionLevel: "M" });
+    return res.json({
+      qrDataUrl,
+      handoff: { deliveryId: delivery.id, pin: delivery.securityPin },
+      hint: "QR encodes JSON with delivery id and recipient PIN for handoff."
+    });
+  } catch (e) {
+    return res.status(500).json({ error: "QR generation failed." });
+  }
+});
+
+app.post("/api/deliveries/:id/pickup-proof", uploadPickup.single("photo"), (req, res) => {
+  const delivery = fetchDelivery(req.params.id);
+  if (!delivery) return res.status(404).json({ error: "Delivery not found." });
+  if (!req.file) return res.status(400).json({ error: "Pickup photo is required." });
+  delivery.pickupPhotoPath = `/uploads/pickup/${path.basename(req.file.path)}`;
+  delivery.history.push({ status: "Pickup photo captured", at: nowIso() });
+  saveDelivery(delivery);
+  broadcastEvent("delivery.updated", { delivery: { id: delivery.id, pickupPhoto: true } });
+  return res.json(fetchDelivery(delivery.id));
+});
+
+app.get("/api/deliveries/:id/ratings", (req, res) => {
+  res.json(all("SELECT * FROM delivery_ratings WHERE delivery_id = ? ORDER BY created_at ASC", req.params.id));
+});
+
+app.post("/api/deliveries/:id/ratings", requireAuth, (req, res) => {
+  const delivery = fetchDelivery(req.params.id);
+  if (!delivery) return res.status(404).json({ error: "Delivery not found." });
+  const { target, score, comment = "" } = req.body || {};
+  const bodyDriverId = String(req.body?.driverId || "").trim();
+  const headerDriverId = String(req.headers["x-driver-id"] || "").trim();
+  const effectiveDriverId = bodyDriverId || headerDriverId;
+  if (!["driver", "sender"].includes(target)) return res.status(400).json({ error: "target must be driver or sender." });
+  const s = Number(score);
+  if (!Number.isFinite(s) || s < 1 || s > 5) return res.status(400).json({ error: "score must be 1-5." });
+
+  if (target === "driver") {
+    if (req.user.role !== "sender") return res.status(403).json({ error: "Only senders rate drivers here." });
+  } else {
+    if (req.user.role !== "driver") return res.status(403).json({ error: "Only drivers rate senders here." });
+    if (!effectiveDriverId || effectiveDriverId !== delivery.driver?.id) {
+      return res.status(403).json({ error: "Must be the assigned driver (send x-driver-id header)." });
+    }
+  }
+
+  const uid = req.user.id;
+  const rid = `rt_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+  try {
+    run(
+      "INSERT INTO delivery_ratings (id,delivery_id,from_user_id,from_role,target,score,comment,created_at) VALUES (?,?,?,?,?,?,?,?)",
+      rid,
+      delivery.id,
+      uid,
+      req.user.role,
+      target,
+      Math.round(s),
+      String(comment).slice(0, 500),
+      nowIso()
+    );
+  } catch (e) {
+    if (String(e.message).includes("UNIQUE")) return res.status(409).json({ error: "You already submitted this rating." });
+    throw e;
+  }
+
+  if (target === "driver" && delivery.driver?.id) recomputeDriverRating(delivery.driver.id);
+  broadcastEvent("delivery.updated", { delivery: { id: delivery.id, rated: true } });
+  return res.status(201).json(get("SELECT * FROM delivery_ratings WHERE id=?", rid));
+});
+
+app.post("/api/payments/create-intent", requireAuth, async (req, res) => {
+  const { deliveryId } = req.body || {};
+  const delivery = fetchDelivery(deliveryId);
+  if (!delivery) return res.status(404).json({ error: "Delivery not found." });
+  const amountCents = Math.max(50, Math.round(Number(delivery.fare) * 100));
+  if (!stripe) {
+    const d = fetchDelivery(deliveryId);
+    d.paymentStatus = "authorized";
+    saveDelivery(d);
+    auditLog(req, "payment.mock_authorized", "delivery", delivery.id, {});
+    return res.json({
+      mock: true,
+      publishableKey: "",
+      clientSecret: null,
+      status: d.paymentStatus,
+      message: "Stripe not configured — payment marked authorized for demo."
+    });
+  }
+  try {
+    const pi = await stripe.paymentIntents.create({
+      amount: amountCents,
+      currency: "eur",
+      automatic_payment_methods: { enabled: true },
+      metadata: { deliveryId: delivery.id }
+    });
+    const d = fetchDelivery(deliveryId);
+    d.stripePaymentIntentId = pi.id;
+    d.paymentStatus = pi.status;
+    saveDelivery(d);
+    auditLog(req, "payment.intent_created", "delivery", delivery.id, { paymentIntentId: pi.id });
+    return res.json({
+      mock: false,
+      publishableKey: process.env.STRIPE_PUBLISHABLE_KEY || "",
+      clientSecret: pi.client_secret,
+      status: pi.status
+    });
+  } catch (e) {
+    return res.status(500).json({ error: e.message || "Stripe error" });
+  }
+});
+
+app.post("/api/push/register", requireAuth, (req, res) => {
+  const token = String(req.body?.token || "").trim();
+  const platform = String(req.body?.platform || "web").trim();
+  if (!token) return res.status(400).json({ error: "token is required." });
+  const id = `pt_${Date.now()}`;
+  try {
+    run("INSERT INTO push_tokens (id,user_id,token,platform,created_at) VALUES (?,?,?,?,?)", id, req.user.id, token, platform, nowIso());
+  } catch (e) {
+    if (String(e.message).includes("UNIQUE")) return res.json({ ok: true, duplicate: true });
+    throw e;
+  }
+  auditLog(req, "push.token_registered", "user", req.user.id, { platform });
+  return res.status(201).json({ ok: true, id });
+});
+
+app.post("/api/admin/push-test", requireAuth, requireRole("admin"), async (req, res) => {
+  const userId = String(req.body?.userId || "").trim();
+  const title = String(req.body?.title || "SwiftDrop test").trim();
+  const body = String(req.body?.body || "Push pipeline is working.").trim();
+  if (!userId) return res.status(400).json({ error: "userId is required (JWT subject from a logged-in user)." });
+  if (!fcm.isReady()) return res.status(503).json({ error: "FCM not configured. Set FIREBASE_SERVICE_ACCOUNT_PATH or FIREBASE_SERVICE_ACCOUNT_JSON." });
+  try {
+    const result = await fcm.sendToUser(userId, {
+      title,
+      body,
+      data: { type: "admin_test", ts: String(Date.now()) }
+    });
+    auditLog(req, "push.admin_test", "user", userId, { successCount: result.successCount });
+    return res.json(result);
+  } catch (e) {
+    return res.status(500).json({ error: e.message || "FCM send failed" });
+  }
+});
+
+app.get("/api/admin/live-positions", requireAuth, requireRole("admin"), (_req, res) => {
+  const positions = Object.fromEntries(livePositions);
+  const drivers = fetchDrivers().map((d) => ({
+    id: d.id,
+    name: d.name,
+    online: d.online,
+    position: positions[d.id] || null
+  }));
+  res.json({ positions, drivers, updatedAt: nowIso() });
+});
+
 app.get("*", (_req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-app.listen(port, () => {
-  console.log(`SwiftDrop MVP running at http://localhost:${port}`);
+const server = http.createServer(app);
+io = new Server(server, { cors: { origin: "*" } });
+
+io.on("connection", (socket) => {
+  socket.on("join:delivery", (deliveryId) => {
+    if (deliveryId) socket.join(`delivery:${deliveryId}`);
+  });
+  socket.on("join:admin", () => {
+    socket.join("admin");
+  });
+  socket.on("driver:location", (payload) => {
+    if (!payload || !payload.driverId) return;
+    const lat = Number(payload.lat);
+    const lng = Number(payload.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    livePositions.set(payload.driverId, {
+      lat,
+      lng,
+      deliveryId: payload.deliveryId || "",
+      at: Date.now()
+    });
+    const out = {
+      driverId: payload.driverId,
+      lat,
+      lng,
+      deliveryId: payload.deliveryId,
+      accuracy: payload.accuracy != null ? Number(payload.accuracy) : undefined,
+      source: payload.source
+    };
+    if (payload.deliveryId) io.to(`delivery:${payload.deliveryId}`).emit("driver:location", out);
+    io.to("admin").emit("driver:location", out);
+    io.emit("positions:refresh", { driverId: payload.driverId, lat, lng });
+  });
+});
+
+server.listen(port, () => {
+  console.log(`SwiftDrop MVP running at http://localhost:${port} (HTTP + Socket.IO)`);
 });
