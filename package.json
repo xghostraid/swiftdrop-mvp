@@ -1,0 +1,25 @@
+{
+  "name": "swiftdrop-mvp",
+  "version": "1.0.0",
+  "description": "SwiftDrop MVP demo app",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "migrate:sqlite": "node scripts/migrate-to-sqlite.js"
+  },
+  "keywords": [
+    "swiftdrop",
+    "delivery",
+    "mvp"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "express": "^4.19.2",
+    "express-rate-limit": "^8.5.0",
+    "jsonwebtoken": "^9.0.3",
+    "multer": "^2.1.1"
+  }
+}

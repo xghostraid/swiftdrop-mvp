@@ -1,0 +1,568 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+    <title>SwiftDrop</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div id="start-screen" class="auth-screen">
+      <div class="auth-card start-card">
+        <div class="logo-mark">SD</div>
+        <h1>SwiftDrop</h1>
+        <p>Anything. Anyone. Instantly.</p>
+        <button id="start-login-btn">Log in</button>
+        <button id="start-signup-btn" class="secondary-btn">Sign up</button>
+      </div>
+    </div>
+
+    <div id="auth-screen" class="auth-screen hidden">
+      <div class="auth-bg-orb auth-orb-a"></div>
+      <div class="auth-bg-orb auth-orb-b"></div>
+      <div class="auth-card">
+        <h2>SwiftDrop Access</h2>
+        <p>Use demo accounts to enter Sender, Driver, or Admin mode.</p>
+        <div class="auth-role-pills">
+          <span class="auth-role-pill">Sender</span>
+          <span class="auth-role-pill">Driver</span>
+          <span class="auth-role-pill">Admin</span>
+        </div>
+        <input id="auth-email" placeholder="Email" />
+        <input id="auth-password" type="password" placeholder="Password" />
+        <label class="remember-row">
+          <input id="auth-remember" type="checkbox" />
+          <span>Remember me on this device</span>
+        </label>
+        <button id="auth-login-btn">Login</button>
+        <button id="auth-back-btn" class="secondary-btn">Back</button>
+        <div id="auth-demo-users" class="auth-demo-users"></div>
+      </div>
+    </div>
+
+    <div id="signup-screen" class="auth-screen hidden">
+      <div class="auth-card">
+        <h2>Create SwiftDrop Account</h2>
+        <p>Quick signup for Sender, Driver, or Admin demo roles.</p>
+        <input id="signup-name" placeholder="Full name" />
+        <input id="signup-email" placeholder="Email" />
+        <input id="signup-password" type="password" placeholder="Password" />
+        <div class="password-meter">
+          <div id="signup-strength-fill" class="password-meter-fill"></div>
+        </div>
+        <div id="signup-strength-text" class="auth-demo-users">Password strength: weak</div>
+        <select id="signup-role">
+          <option value="sender">Sender</option>
+          <option value="driver">Driver</option>
+          <option value="admin">Admin</option>
+        </select>
+        <button id="signup-submit-btn">Create account</button>
+        <button id="signup-back-btn" class="secondary-btn">Back</button>
+      </div>
+    </div>
+    <div id="profile-menu-wrap" class="profile-menu-wrap hidden">
+      <button id="profile-menu-btn" class="profile-menu-btn" aria-label="Open profile menu">👤</button>
+      <div id="profile-dropdown" class="profile-dropdown hidden">
+        <div id="profile-menu-name" class="profile-menu-name">User</div>
+        <div id="profile-menu-role" class="profile-menu-role">SENDER</div>
+        <button id="profile-theme-btn" class="profile-theme-btn">Switch to light mode</button>
+        <button id="profile-logout-btn" class="profile-logout-btn">Logout</button>
+      </div>
+    </div>
+    <div id="notif-panel" class="notif-panel hidden">
+      <div class="notif-head">
+        <strong>Notifications</strong>
+        <button id="notif-clear-btn" class="notif-clear-btn">Clear</button>
+      </div>
+      <div id="notif-list" class="notif-list"></div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════
+         SCREEN 1 — HOME
+    ═══════════════════════════════════════════════ -->
+    <div id="screen-home" class="screen active">
+      <div class="phone-shell">
+
+        <header class="home-header">
+          <div>
+            <p class="greeting">Good morning</p>
+            <h1 class="user-name" id="home-username">Precious</h1>
+            <span id="role-chip" class="role-chip">SENDER</span>
+          </div>
+          <button class="bell-btn" id="notif-btn">
+            <span id="notif-badge" class="notif-badge hidden">0</span>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+            </svg>
+          </button>
+        </header>
+
+        <button class="send-cta" id="home-send-btn">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          Send something now
+        </button>
+
+        <div class="category-scroll">
+          <button class="cat-tile" data-cat="Parcel">
+            <span class="cat-icon orange">📦</span>
+            <span>Parcel</span>
+          </button>
+          <button class="cat-tile" data-cat="Documents">
+            <span class="cat-icon teal">📄</span>
+            <span>Document</span>
+          </button>
+          <button class="cat-tile" data-cat="Food">
+            <span class="cat-icon purple">🍔</span>
+            <span>Food</span>
+          </button>
+          <button class="cat-tile" data-cat="Medicine">
+            <span class="cat-icon red">💊</span>
+            <span>Medicine</span>
+          </button>
+          <button class="cat-tile" data-cat="Electronics">
+            <span class="cat-icon blue">💻</span>
+            <span>Electronics</span>
+          </button>
+        </div>
+
+        <div class="section-label">RECENT</div>
+        <div class="recent-list" id="recent-list">
+          <div class="recent-empty">No deliveries yet. Book your first!</div>
+        </div>
+
+        <nav class="bottom-nav">
+          <button class="nav-btn active" data-screen="home">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+            <span>Home</span>
+          </button>
+          <button class="nav-btn" data-screen="history">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            <span>History</span>
+          </button>
+          <button class="nav-btn" data-screen="profile">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            <span>Profile</span>
+          </button>
+        </nav>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════
+         SCREEN 2 — NEW DELIVERY
+    ═══════════════════════════════════════════════ -->
+    <div id="screen-booking" class="screen hidden">
+      <div class="phone-shell">
+
+        <header class="sub-header">
+          <button class="back-btn" data-back="home">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
+          <h2>New delivery</h2>
+        </header>
+
+        <div class="address-card">
+          <div class="addr-line">
+            <span class="dot orange-dot"></span>
+            <div class="addr-field">
+              <div class="addr-label">Pickup</div>
+              <input id="input-pickup" class="addr-input" placeholder="Enter pickup address…" autocomplete="off" />
+            </div>
+          </div>
+          <div class="addr-sep"></div>
+          <div class="addr-line">
+            <span class="dot green-dot"></span>
+            <div class="addr-field">
+              <div class="addr-label">Drop-off</div>
+              <input id="input-dropoff" class="addr-input" placeholder="Enter destination…" autocomplete="off" />
+            </div>
+          </div>
+        </div>
+
+        <div class="section-label">ITEM TYPE</div>
+        <div class="item-chips" id="item-chips">
+          <button class="item-chip selected" data-item="Parcel">Parcel</button>
+          <button class="item-chip" data-item="Documents">Document</button>
+          <button class="item-chip" data-item="Food">Food</button>
+          <button class="item-chip" data-item="Electronics">Fragile</button>
+          <button class="item-chip urgent-chip" data-item="urgent-flag">Urgent</button>
+        </div>
+
+        <div class="section-label">VEHICLE</div>
+        <div class="vehicle-row" id="vehicle-row">
+          <button class="veh-card selected" data-type="bike" data-price="3.50">
+            <span class="veh-icon">🚲</span>
+            <strong>Bike</strong>
+            <small>€2–4</small>
+          </button>
+          <button class="veh-card" data-type="car" data-price="6.00">
+            <span class="veh-icon">🚗</span>
+            <strong>Car</strong>
+            <small>€4–8</small>
+          </button>
+          <button class="veh-card" data-type="van" data-price="11.50">
+            <span class="veh-icon">🚐</span>
+            <strong>Van</strong>
+            <small>€8–15</small>
+          </button>
+        </div>
+
+        <div class="payment-row">
+          <span class="payment-label">Payment</span>
+          <div class="pay-toggles">
+            <button class="pay-btn selected" data-pay="card">Card</button>
+            <button class="pay-btn" data-pay="cash">Cash</button>
+          </div>
+        </div>
+
+        <div class="mode-row">
+          <button class="mode-btn selected" data-mode="asap">ASAP</button>
+          <button class="mode-btn" data-mode="scheduled">Scheduled</button>
+          <input id="input-stops" type="number" min="1" max="8" value="1" class="mini-input" title="Stops" />
+          <div id="sched-wrap" class="hidden">
+            <input type="datetime-local" id="input-scheduled" />
+          </div>
+        </div>
+
+        <div class="multi-stop-wrap">
+          <textarea id="input-stop-addresses" rows="2" placeholder="Extra stops (one per line)"></textarea>
+          <button id="optimize-stops-btn" class="optimize-btn">Optimize stop order</button>
+          <div id="optimized-route-preview" class="optimized-route-preview"></div>
+        </div>
+
+        <div class="promo-row">
+          <input id="input-recipient" class="addr-input promo-input" placeholder="Recipient name (optional)" autocomplete="off" />
+          <input id="input-promo" class="addr-input promo-input" placeholder="Promo code (e.g. WELCOME10)" autocomplete="off" />
+        </div>
+        <div class="pricing-meta">
+          <span id="surge-chip" class="meta-chip">Zone: Standard x1.00</span>
+          <span id="promo-chip" class="meta-chip">Promo: none</span>
+        </div>
+
+        <button class="confirm-cta" id="confirm-btn">
+          Confirm · est. <span id="fare-preview">€3.50</span>
+        </button>
+
+        <nav class="bottom-nav">
+          <button class="nav-btn active" data-screen="home">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+            <span>Home</span>
+          </button>
+          <button class="nav-btn" data-screen="history">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            <span>History</span>
+          </button>
+          <button class="nav-btn" data-screen="profile">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            <span>Profile</span>
+          </button>
+        </nav>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════
+         SCREEN 3 — LIVE TRACKING
+    ═══════════════════════════════════════════════ -->
+    <div id="screen-tracking" class="screen hidden">
+      <div class="phone-shell">
+
+        <header class="sub-header">
+          <button class="back-btn" data-back="home">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
+          <h2>Live tracking</h2>
+          <span class="status-badge" id="track-badge">Matching</span>
+        </header>
+
+        <!-- MAP -->
+        <div class="map-area">
+          <svg class="map-grid" viewBox="0 0 340 180" preserveAspectRatio="xMidYMid slice">
+            <!-- grid lines -->
+            <line x1="0" y1="45" x2="340" y2="45" class="grid-line"/>
+            <line x1="0" y1="90" x2="340" y2="90" class="grid-line"/>
+            <line x1="0" y1="135" x2="340" y2="135" class="grid-line"/>
+            <line x1="68" y1="0" x2="68" y2="180" class="grid-line"/>
+            <line x1="136" y1="0" x2="136" y2="180" class="grid-line"/>
+            <line x1="204" y1="0" x2="204" y2="180" class="grid-line"/>
+            <line x1="272" y1="0" x2="272" y2="180" class="grid-line"/>
+            <!-- route dashes -->
+            <path id="route-path" d="M70,140 Q150,80 270,50" fill="none" stroke="#f5a623" stroke-width="2.5" stroke-dasharray="8 5" stroke-linecap="round" opacity=".9"/>
+            <!-- dots -->
+            <circle cx="70" cy="140" r="8" fill="#f5a623" opacity=".9"/>
+            <circle cx="70" cy="140" r="13" fill="#f5a623" opacity=".2"/>
+            <circle cx="270" cy="50" r="8" fill="#10b981" opacity=".9"/>
+            <circle cx="270" cy="50" r="13" fill="#10b981" opacity=".2"/>
+            <!-- courier marker -->
+            <g id="courier-marker" transform="translate(155,90)">
+              <circle r="16" fill="#f5a623"/>
+              <text y="6" text-anchor="middle" font-size="14" fill="#1a1f2e">🚲</text>
+            </g>
+          </svg>
+        </div>
+        <div class="map-live-meta">
+          <span id="driver-live-pos">Driver location: waiting for assignment</span>
+          <span id="map-updated-at">Updated --:--</span>
+        </div>
+
+        <div class="track-stats">
+          <div class="track-stat">
+            <span>Arrives in</span>
+            <strong id="track-eta" class="orange">6 min</strong>
+          </div>
+          <div class="track-divider"></div>
+          <div class="track-stat">
+            <span>Distance left</span>
+            <strong id="track-dist">1.2 km</strong>
+          </div>
+        </div>
+
+        <div class="track-progress-wrap">
+          <div class="track-progress-bar">
+            <div class="track-progress-fill" id="track-progress" style="width:40%"></div>
+          </div>
+        </div>
+
+        <div class="driver-info-card" id="driver-info-card">
+          <div class="driver-ava" id="track-ava">AK</div>
+          <div class="driver-details">
+            <div class="driver-fullname" id="track-driver-name">Andrius K.</div>
+            <div class="driver-stars">★★★★★</div>
+            <div class="driver-plate-item" id="track-plate">LPL 341 · Package</div>
+          </div>
+          <div class="driver-actions">
+            <button class="icon-circle">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6A19.79 19.79 0 012.12 4.18 2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>
+            </button>
+            <button class="icon-circle">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="track-history" id="track-history"></div>
+        <div class="milestone-board">
+          <div class="mile-card" id="mile-pickedup-card">
+            <div class="mile-title">Picked Up</div>
+            <div class="mile-time" id="mile-pickedup-time">Pending</div>
+          </div>
+          <div class="mile-card" id="mile-delivered-card">
+            <div class="mile-title">Delivered</div>
+            <div class="mile-time" id="mile-delivered-time">Pending</div>
+          </div>
+        </div>
+        <div class="pin-verify-card">
+          <input id="track-pin-input" placeholder="Enter recipient PIN to complete" />
+          <button id="track-pin-btn">Verify PIN</button>
+        </div>
+        <div class="pod-card">
+          <div class="pod-title">Proof of delivery</div>
+          <input id="pod-note" placeholder="Delivery note (optional)" />
+          <input id="pod-signature" placeholder="Recipient signature name (optional)" />
+          <input id="pod-photo" type="file" accept="image/*" />
+          <button id="pod-save-btn">Save proof</button>
+        </div>
+        <div class="chat-card">
+          <div class="chat-title">Order chat</div>
+          <div id="chat-feed" class="chat-feed"></div>
+          <div class="chat-compose">
+            <input id="chat-input" placeholder="Type a message..." />
+            <button id="chat-send-btn">Send</button>
+          </div>
+        </div>
+        <button class="new-delivery-link" id="new-delivery-btn">+ New delivery</button>
+
+        <nav class="bottom-nav">
+          <button class="nav-btn active" data-screen="home">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+            <span>Home</span>
+          </button>
+          <button class="nav-btn" data-screen="history">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            <span>History</span>
+          </button>
+          <button class="nav-btn" data-screen="profile">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            <span>Profile</span>
+          </button>
+        </nav>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════
+         SCREEN 4 — HISTORY / OPS
+    ═══════════════════════════════════════════════ -->
+    <div id="screen-history" class="screen hidden">
+      <div class="phone-shell">
+
+        <header class="sub-header">
+          <button class="back-btn" data-back="home">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
+          <h2>History</h2>
+        </header>
+
+        <div class="ops-stats" id="ops-stats"></div>
+        <div class="analytics-wrap">
+          <h3>Analytics v2</h3>
+          <div id="analytics-summary" class="analytics-summary"></div>
+          <div id="analytics-daily" class="analytics-daily"></div>
+        </div>
+        <div class="admin-board">
+          <div class="admin-col">
+            <h3>Matching</h3>
+            <div id="admin-matching" class="admin-list"></div>
+          </div>
+          <div class="admin-col">
+            <h3>In Progress</h3>
+            <div id="admin-progress" class="admin-list"></div>
+          </div>
+          <div class="admin-col">
+            <h3>Completed</h3>
+            <div id="admin-complete" class="admin-list"></div>
+          </div>
+        </div>
+        <div class="heatmap-wrap">
+          <h3>Zone Heatmap</h3>
+          <div id="heatmap-list" class="heatmap-list"></div>
+        </div>
+        <div class="surge-editor" id="surge-editor">
+          <h3>Surge Zone Editor (Admin)</h3>
+          <div id="surge-zone-list" class="surge-zone-list"></div>
+          <input id="surge-name" placeholder="Zone name" />
+          <input id="surge-keywords" placeholder="Keywords (comma separated)" />
+          <input id="surge-multiplier" type="number" step="0.01" min="1" placeholder="Multiplier (e.g. 1.2)" />
+          <button id="surge-add-btn">Add zone</button>
+        </div>
+        <div class="support-wrap">
+          <h3>Support Center</h3>
+          <input id="support-title" placeholder="Issue title" />
+          <textarea id="support-description" rows="2" placeholder="Describe issue"></textarea>
+          <div class="support-controls">
+            <select id="support-category">
+              <option value="general">General</option>
+              <option value="payment">Payment</option>
+              <option value="driver">Driver</option>
+              <option value="delivery">Delivery</option>
+            </select>
+            <select id="support-severity">
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+            </select>
+          </div>
+          <button id="support-create-btn">Create ticket</button>
+          <div id="support-ticket-list" class="support-ticket-list"></div>
+        </div>
+        <div class="admin-review-wrap" id="admin-review-wrap">
+          <h3>Admin Reviews</h3>
+          <div class="section-label" style="padding:0 0 6px;">Payout Requests</div>
+          <div id="admin-payout-list" class="support-ticket-list"></div>
+          <div class="section-label" style="padding:6px 0 6px;">Driver Documents</div>
+          <div id="admin-doc-review-list" class="support-ticket-list"></div>
+        </div>
+        <div class="history-feed" id="history-feed"></div>
+
+        <nav class="bottom-nav">
+          <button class="nav-btn" data-screen="home">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+            <span>Home</span>
+          </button>
+          <button class="nav-btn active" data-screen="history">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            <span>History</span>
+          </button>
+          <button class="nav-btn" data-screen="profile">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            <span>Profile</span>
+          </button>
+        </nav>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════
+         SCREEN 5 — DRIVER MODE
+    ═══════════════════════════════════════════════ -->
+    <div id="screen-profile" class="screen hidden">
+      <div class="phone-shell">
+
+        <div class="driver-top">
+          <div>
+            <div class="driver-mode-label">Driver mode</div>
+            <div class="driver-mode-name" id="driver-name-top">Andrius K.</div>
+          </div>
+          <button class="online-pill" id="online-pill">Online</button>
+        </div>
+
+        <div class="driver-stats-cards">
+          <div class="dstat-card">
+            <div class="dstat-label">Today</div>
+            <div class="dstat-val orange" id="dstat-earnings">€0.00</div>
+          </div>
+          <div class="dstat-card">
+            <div class="dstat-label">Trips</div>
+            <div class="dstat-val" id="dstat-trips">0</div>
+          </div>
+          <div class="dstat-card">
+            <div class="dstat-label">Rating</div>
+            <div class="dstat-val teal" id="dstat-rating">4.9</div>
+          </div>
+        </div>
+        <div class="bank-card">
+          <div class="bank-title">Payout Bank Details</div>
+          <input id="bank-holder-name" class="bank-input" placeholder="Account holder name" />
+          <input id="bank-name" class="bank-input" placeholder="Bank name" />
+          <input id="bank-iban" class="bank-input" placeholder="IBAN" />
+          <input id="bank-swift" class="bank-input" placeholder="SWIFT / BIC (optional)" />
+          <button id="bank-save-btn" class="bank-save-btn">Save bank details</button>
+          <div id="bank-save-meta" class="bank-save-meta">Fill details to receive payouts.</div>
+        </div>
+        <div class="payout-card">
+          <div class="bank-title">Payout Requests</div>
+          <input id="payout-amount" class="bank-input" type="number" min="1" step="0.01" placeholder="Amount to withdraw" />
+          <button id="payout-request-btn" class="bank-save-btn">Request payout</button>
+          <div id="payout-meta" class="bank-save-meta">Minimum payout applies.</div>
+          <div id="payout-history" class="payout-history"></div>
+        </div>
+        <div class="docs-card">
+          <div class="bank-title">Driver Verification Documents</div>
+          <select id="doc-type" class="bank-input">
+            <option value="id">ID Card</option>
+            <option value="license">Driver License</option>
+            <option value="vehicle">Vehicle Document</option>
+            <option value="other">Other</option>
+          </select>
+          <input id="doc-file" type="file" class="bank-input" />
+          <button id="doc-upload-btn" class="bank-save-btn">Upload document</button>
+          <div id="doc-meta" class="bank-save-meta">Upload docs for review.</div>
+          <div id="doc-list" class="payout-history"></div>
+        </div>
+
+        <div class="offer-section" id="offer-section">
+          <p class="no-offer-msg" id="no-offer-msg">Waiting for delivery requests…</p>
+        </div>
+
+        <div class="section-label" id="last-label" style="display:none">LAST COMPLETED</div>
+        <div class="last-jobs" id="last-jobs"></div>
+
+        <nav class="bottom-nav driver-nav">
+          <button class="nav-btn active">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+            <span>Home</span>
+          </button>
+          <button class="nav-btn" data-screen="history">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20"/></svg>
+            <span>Jobs</span>
+          </button>
+          <button class="nav-btn">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
+            <span>Earnings</span>
+          </button>
+        </nav>
+      </div>
+    </div>
+
+    <!-- TOAST -->
+    <div id="toast" class="toast hidden"></div>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

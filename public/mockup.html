@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SwiftDrop Ideal Flow Mockup</title>
+    <link rel="stylesheet" href="/mockup.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="map-layer">
+        <div class="brand-badge">SwiftDrop</div>
+        <div class="top-actions">
+          <button class="ghost">Search</button>
+          <button class="ghost">History</button>
+        </div>
+        <div class="eta-chip">Nearest rider: 2 min away</div>
+      </section>
+
+      <section class="bottom-sheet" id="sheet">
+        <div class="sheet-handle"></div>
+        <div class="sheet-head">
+          <h1 id="flow-title">Anything. Anyone. Instantly.</h1>
+          <p id="flow-sub">Fast local delivery with familiar map-first flow.</p>
+        </div>
+
+        <div id="step-home" class="step active">
+          <div class="quick-tags">
+            <span>Food</span>
+            <span>Documents</span>
+            <span>Parcels</span>
+            <span>Groceries</span>
+          </div>
+          <button class="primary huge" data-next="vehicle">Send Now</button>
+          <p class="hint">3 taps: Choose vehicle -> Confirm route -> Book</p>
+        </div>
+
+        <div id="step-vehicle" class="step">
+          <h2>Choose your delivery type</h2>
+          <div class="vehicle-grid" id="vehicle-grid">
+            <button class="vehicle selected" data-vehicle="Bike">
+              <strong>Bike</strong>
+              <small>Small urgent items</small>
+              <em>from $4.50</em>
+            </button>
+            <button class="vehicle" data-vehicle="Car">
+              <strong>Car</strong>
+              <small>Everyday parcels</small>
+              <em>from $6.20</em>
+            </button>
+            <button class="vehicle" data-vehicle="Van">
+              <strong>Van</strong>
+              <small>Bulky items</small>
+              <em>from $8.90</em>
+            </button>
+            <button class="vehicle" data-vehicle="Truck">
+              <strong>Truck</strong>
+              <small>Heavy deliveries</small>
+              <em>from $12.40</em>
+            </button>
+          </div>
+          <div class="row">
+            <button class="secondary" data-back="home">Back</button>
+            <button class="primary" data-next="route">Continue</button>
+          </div>
+        </div>
+
+        <div id="step-route" class="step">
+          <h2>Route and item</h2>
+          <label>
+            Pickup
+            <input value="Gedimino pr. 9, Vilnius" />
+          </label>
+          <label>
+            Drop-off
+            <input value="Ozo g. 18, Vilnius" />
+          </label>
+          <label>
+            Item type
+            <select>
+              <option>Documents</option>
+              <option>Food</option>
+              <option>Parcel</option>
+              <option>Electronics</option>
+            </select>
+          </label>
+          <div class="choice-row">
+            <button class="choice selected">ASAP</button>
+            <button class="choice">Scheduled</button>
+            <button class="choice">Cash</button>
+            <button class="choice selected">Card</button>
+          </div>
+          <div class="row">
+            <button class="secondary" data-back="vehicle">Back</button>
+            <button class="primary" data-next="confirm">Review</button>
+          </div>
+        </div>
+
+        <div id="step-confirm" class="step">
+          <h2>Confirm in one tap</h2>
+          <div class="summary-card">
+            <p><b>Vehicle:</b> <span id="chosen-vehicle">Bike</span></p>
+            <p><b>ETA pickup:</b> 2 min</p>
+            <p><b>Distance:</b> 4.8 km</p>
+            <p><b>Estimated fare:</b> $7.20</p>
+          </div>
+          <button class="primary huge">Book SwiftDrop</button>
+          <p class="hint">After booking: live map tracking, in-app chat, PIN handoff.</p>
+          <button class="link" data-back="route">Edit details</button>
+        </div>
+      </section>
+    </main>
+
+    <script src="/mockup.js"></script>
+  </body>
+</html>
